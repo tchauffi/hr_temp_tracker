@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+venv/
+env/
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build
+dist/
+build/
+*.pyc
+__pycache__/
+
+# Project specific
+.humidity_data/
+*.db
+*.sqlite
+
+# Python
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+
+# Next.js
+.next/
+out/
+.vercel

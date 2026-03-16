@@ -1,0 +1,52 @@
+services:
+
+  # ── TimescaleDB ────────────────────────────────────────────────────────────
+  db:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       humidity_tracker
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI (reads serial via socat TCP proxy on the host) ─────────────────
+  # On macOS, Docker Desktop cannot pass USB devices into containers.
+  # start.sh runs `socat` on the host to forward the serial port to TCP 8899,
+  # and the container reaches it via host.docker.internal:8899.
+  api:
+    build: ./api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/humidity_tracker
+      SERIAL_PORT:  socket://host.docker.internal:8899
+      SERIAL_BAUD:  "9600"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Next.js frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  db_data:
