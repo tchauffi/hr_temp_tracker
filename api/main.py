@@ -20,7 +20,7 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:password@db:5432/humidity_tracker",
 )
 SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
-SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
+SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "9600"))
 
 
 # ---------------------------------------------------------------------------

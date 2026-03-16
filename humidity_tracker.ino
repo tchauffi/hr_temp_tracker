@@ -20,7 +20,7 @@ float applyEMA(float newValue, float prev) {
 // ---------------------------------------------------------------------------
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   // Initialize OLED display (I2C)
   Oled.begin();
