@@ -15,7 +15,7 @@
 set -euo pipefail
 
 PROXY_PORT="${PROXY_PORT:-8899}"
-SERIAL_BAUD="${SERIAL_BAUD:-9600}"
+SERIAL_BAUD="${SERIAL_BAUD:-115200}"
 
 # ── Detect serial device ───────────────────────────────────────────────────
 if [[ -z "${SERIAL_DEV:-}" ]]; then

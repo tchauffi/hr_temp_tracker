@@ -20,7 +20,7 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:password@db:5432/humidity_tracker",
 )
 SERIAL_PORT = os.getenv("SERIAL_PORT", "/dev/ttyUSB0")
-SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "9600"))
+SERIAL_BAUD = int(os.getenv("SERIAL_BAUD", "115200"))
 
 
 # ---------------------------------------------------------------------------
@@ -64,18 +64,6 @@ def _db():
     return psycopg.connect(DATABASE_URL, row_factory=dict_row)
 
 
-def _insert_reading(ts: datetime, temperature: float, humidity: float) -> None:
-    try:
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO readings (time, temperature, humidity) VALUES (%s, %s, %s)",
-                    (ts, temperature, humidity),
-                )
-    except Exception as exc:
-        print(f"[db] insert error: {exc}")
-
-
 # ---------------------------------------------------------------------------
 # Serial reader (runs in a background thread)
 # ---------------------------------------------------------------------------
@@ -99,8 +87,25 @@ def _broadcast(payload: str) -> None:
         _main_loop.call_soon_threadsafe(q.put_nowait, payload)
 
 
+def _connect_db() -> psycopg.Connection:
+    """Open a persistent DB connection, retrying until the DB is ready."""
+    while True:
+        try:
+            conn = psycopg.connect(DATABASE_URL)
+            print("[db] connected")
+            return conn
+        except Exception as exc:
+            print(f"[db] connection failed: {exc} — retrying in 5 s")
+            time.sleep(5)
+
+
 def _serial_reader() -> None:
     global _latest_reading
+
+    # One persistent connection for the lifetime of this thread.
+    # On any DB error we reconnect; on any serial error we re-open the port.
+    db_conn = _connect_db()
+
     while True:
         try:
             with serial.serial_for_url(
@@ -116,7 +121,22 @@ def _serial_reader() -> None:
                     temperature, humidity = result
                     ts = datetime.utcnow()
 
-                    _insert_reading(ts, temperature, humidity)
+                    # Insert using the persistent connection
+                    try:
+                        with db_conn.cursor() as cur:
+                            cur.execute(
+                                "INSERT INTO readings (time, temperature, humidity)"
+                                " VALUES (%s, %s, %s)",
+                                (ts, temperature, humidity),
+                            )
+                        db_conn.commit()
+                    except Exception as exc:
+                        print(f"[db] insert error: {exc} — reconnecting")
+                        try:
+                            db_conn.close()
+                        except Exception:
+                            pass
+                        db_conn = _connect_db()
 
                     _latest_reading = {
                         "time": _fmt(ts),

@@ -20,7 +20,7 @@ float applyEMA(float newValue, float prev) {
 // ---------------------------------------------------------------------------
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
 
   // Initialize OLED display (I2C)
   Oled.begin();
@@ -46,12 +46,6 @@ void loop() {
 
   filteredTemp = applyEMA(rawTemp, filteredTemp);
   filteredHumi = applyEMA(rawHumi, filteredHumi);
-
-  // Human-readable debug
-  Serial.print("Raw  -> Temp: "); Serial.print(rawTemp, 1);
-  Serial.print(" C | Humi: ");    Serial.print(rawHumi, 1); Serial.println(" %");
-  Serial.print("Filt -> Temp: "); Serial.print(filteredTemp, 1);
-  Serial.print(" C | Humi: ");    Serial.print(filteredHumi, 1); Serial.println(" %");
 
   // Machine-readable line parsed by the Python server
   // Format: LOG:<temperature>:<humidity>

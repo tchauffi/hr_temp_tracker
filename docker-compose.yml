@@ -31,7 +31,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:password@db:5432/humidity_tracker
       SERIAL_PORT:  socket://host.docker.internal:8899
-      SERIAL_BAUD:  "9600"
+      SERIAL_BAUD:  "115200"
     depends_on:
       db:
         condition: service_healthy
