@@ -4,26 +4,49 @@ A full-stack IoT project that reads temperature and humidity from an Arduino sen
 
 ## Architecture
 
+```mermaid
+graph TD
+    A[Arduino Mega\nDHT sensor + OLED\n9600 baud] -->|LOG:temp:humi\nUSB Serial| B[socat\nhost TCP proxy\n:8899]
+
+    B -->|socket://host.docker.internal:8899| C[FastAPI\nserial reader thread\nREST + SSE]
+
+    C -->|INSERT readings| D[(TimescaleDB\nPostgreSQL + hypertable)]
+    D -->|time_bucket aggregation| C
+
+    C -->|SSE /api/stream\nGET /api/readings\nGET /api/readings/latest| E[Next.js Frontend\nCurrentReadings\nHistoryChart]
+
+    subgraph Docker
+        C
+        D
+        E
+    end
+
+    subgraph Host macOS
+        A
+        B
+    end
 ```
-Arduino Mega (DHT sensor)
-        │ USB Serial (9600 baud)
-        ▼
-   macOS host
-   socat TCP proxy (:8899)
-        │ TCP socket
-        ▼
-┌───────────────────────────────┐
-│         Docker                │
-│                               │
-│  FastAPI (api:8000)           │
-│    ├─ serial reader thread    │
-│    ├─ REST endpoints          │
-│    └─ SSE stream              │
-│          │                    │
-│  TimescaleDB (db:5432)        │
-│                               │
-│  Next.js frontend (:3000)     │
-└───────────────────────────────┘
+
+### Data flow
+
+```mermaid
+sequenceDiagram
+    participant Arduino
+    participant socat
+    participant SerialThread as Serial Thread (daemon)
+    participant DB as TimescaleDB
+    participant SSE as SSE Clients (browser)
+
+    Arduino->>socat: LOG:24.5:61.2\n (9600 baud)
+    socat->>SerialThread: TCP socket forward
+    SerialThread->>SerialThread: parse + EMA filter (α=0.2)
+    SerialThread->>DB: INSERT (time, temp, humi)
+    SerialThread->>SSE: broadcast via asyncio.Queue
+
+    loop Every 30s
+        SSE->>DB: GET /api/readings?hours=N
+        DB-->>SSE: time_bucket aggregation
+    end
 ```
 
 **Why socat?** Docker Desktop on macOS runs inside a Linux VM and cannot pass USB devices into containers. `socat` bridges the Arduino serial port to a TCP socket on the host; the API container connects to it via `host.docker.internal:8899`. On Linux, you can mount the device directly and drop the socat step.
