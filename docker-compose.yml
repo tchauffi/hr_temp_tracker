@@ -26,8 +26,6 @@ services:
   api:
     build: ./api
     restart: unless-stopped
-    ports:
-      - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:password@db:5432/humidity_tracker
       SERIAL_PORT:  socket://host.docker.internal:8899
@@ -40,8 +38,8 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+    environment:
+      API_URL: http://api:8000
     restart: unless-stopped
     ports:
       - "3000:3000"

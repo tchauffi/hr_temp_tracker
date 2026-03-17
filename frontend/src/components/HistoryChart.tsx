@@ -25,7 +25,7 @@ const RANGES = [
   { label: "7d",  hours: 168 },
 ];
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "";
 
 function formatTick(isoTime: string, hours: number): string {
   const d = new Date(isoTime);
@@ -119,7 +119,13 @@ export function HistoryChart() {
               <YAxis
                 yAxisId="humi"
                 orientation="right"
-                domain={[0, 100]}
+                domain={([dataMin, dataMax]: [number, number]) => {
+                  const pad = Math.max((dataMax - dataMin) * 0.1, 2);
+                  return [
+                    Math.max(0,   Math.floor(dataMin - pad)),
+                    Math.min(100, Math.ceil(dataMax  + pad)),
+                  ];
+                }}
                 tickFormatter={(v) => `${v}%`}
                 tick={{ fontSize: 11, fill: "#3b82f6" }}
                 axisLine={false}

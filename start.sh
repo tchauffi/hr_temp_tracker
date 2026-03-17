@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# start.sh — start the full humidity tracker stack
+# start.sh — start the full humidity tracker stack (detached)
 #
 # On macOS, Docker Desktop cannot pass USB/serial devices into containers.
 # This script bridges the Arduino serial port to a TCP socket on the host,
@@ -8,14 +8,16 @@
 # Prerequisites: socat  →  brew install socat
 #
 # Usage:
-#   ./start.sh                        # auto-detect serial port
+#   ./start.sh                        # auto-detect serial port, run detached
 #   SERIAL_DEV=/dev/cu.usbmodem1234 ./start.sh
 #   ./start.sh --build                # force Docker image rebuild
+#   ./stop.sh                         # stop everything
 
 set -euo pipefail
 
 PROXY_PORT="${PROXY_PORT:-8899}"
 SERIAL_BAUD="${SERIAL_BAUD:-9600}"
+SOCAT_PID_FILE="${TMPDIR:-/tmp}/.humidity_tracker_socat.pid"
 
 # ── Detect serial device ───────────────────────────────────────────────────
 if [[ -z "${SERIAL_DEV:-}" ]]; then
@@ -41,8 +43,8 @@ fi
 # ── Release the serial device if anything is holding it ────────────────────
 # Kill by process name first (previous socat runs), then fall back to lsof
 # to catch any stray process (old uvicorn, Arduino serial monitor, etc.).
-pkill -f "socat.*TCP-LISTEN:${PROXY_PORT}" 2>/dev/null && echo "[proxy] stopped listener"  || true
-pkill -f "socat.*${SERIAL_DEV}"            2>/dev/null && echo "[proxy] stopped children"  || true
+pkill -f "socat.*TCP-LISTEN:${PROXY_PORT}" 2>/dev/null && echo "[proxy] stopped listener" || true
+pkill -f "socat.*${SERIAL_DEV}"            2>/dev/null && echo "[proxy] stopped children" || true
 # Any remaining process still holding the device?
 PIDS=$(lsof -t "${SERIAL_DEV}" 2>/dev/null || true)
 if [[ -n "$PIDS" ]]; then
@@ -56,16 +58,18 @@ sleep 1
 # set the baud rate at the OS level first so socat just forwards raw bytes.
 stty -f "${SERIAL_DEV}" "${SERIAL_BAUD}" cs8 -cstopb -parenb raw
 
-# ── Start serial → TCP proxy ───────────────────────────────────────────────
+# ── Start serial → TCP proxy (detached) ───────────────────────────────────
 echo "[proxy] forwarding $SERIAL_DEV → TCP :${PROXY_PORT}"
 socat TCP-LISTEN:${PROXY_PORT},reuseaddr,fork \
       FILE:${SERIAL_DEV},raw,echo=0 &
 SOCAT_PID=$!
-echo "[proxy] PID $SOCAT_PID"
+echo $SOCAT_PID > "$SOCAT_PID_FILE"
+echo "[proxy] PID $SOCAT_PID (saved to $SOCAT_PID_FILE)"
 
-# Kill the proxy (parent + any forked children) when this script exits
-trap 'echo "[proxy] stopping"; pkill -f "socat.*${SERIAL_DEV}" 2>/dev/null || true; kill $SOCAT_PID 2>/dev/null || true' EXIT INT TERM
-
-# ── Start Docker services ─────────────────────────────────────────────────
+# ── Start Docker services (detached) ─────────────────────────────────────
 echo "[docker] starting all services..."
-docker compose up "$@"
+docker compose up -d "$@"
+
+echo ""
+echo "Stack is running. Dashboard → http://localhost:3000"
+echo "To stop:  ./stop.sh"

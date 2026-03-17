@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface Reading {
   time: string;
@@ -8,21 +8,41 @@ interface Reading {
   humidity: number;
 }
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API = "";
+
+function useSecondsAgo(updatedAt: Date | null): string {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!updatedAt) return "";
+  const secs = Math.floor((Date.now() - updatedAt.getTime()) / 1000);
+  if (secs < 5) return "just now";
+  return `${secs}s ago`;
+}
 
 function Stat({
   value,
   unit,
   label,
   color,
+  flash,
 }: {
   value: string;
   unit: string;
   label: string;
   color: string;
+  flash: boolean;
 }) {
   return (
-    <div className={`rounded-2xl p-6 text-center ${color}`}>
+    <div
+      className={`rounded-2xl p-6 text-center transition-all duration-150 ${color} ${
+        flash ? "brightness-95 scale-[0.98]" : ""
+      }`}
+    >
       <div className="flex items-end justify-center gap-1">
         <span className="text-6xl font-bold tabular-nums">{value}</span>
         <span className="text-2xl font-medium pb-1">{unit}</span>
@@ -37,21 +57,34 @@ function Stat({
 export function CurrentReadings() {
   const [reading, setReading] = useState<Reading | null>(null);
   const [live, setLive] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const secondsAgo = useSecondsAgo(updatedAt);
+
+  function handleReading(r: Reading) {
+    setReading(r);
+    setUpdatedAt(new Date());
+    setFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(false), 150);
+  }
 
   useEffect(() => {
-    // Seed with latest stored value
     fetch(`${API}/api/readings/latest`)
       .then((r) => r.json())
-      .then((d) => d.temperature !== undefined && setReading(d))
+      .then((d) => d.temperature !== undefined && handleReading(d))
       .catch(() => {});
 
-    // Subscribe to live SSE stream
     const es = new EventSource(`${API}/api/stream`);
     es.onopen = () => setLive(true);
-    es.onmessage = (e) => setReading(JSON.parse(e.data));
+    es.onmessage = (e) => handleReading(JSON.parse(e.data));
     es.onerror = () => setLive(false);
 
-    return () => es.close();
+    return () => {
+      es.close();
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    };
   }, []);
 
   return (
@@ -62,12 +95,14 @@ export function CurrentReadings() {
           unit="°C"
           label="Temperature"
           color="bg-orange-50 text-orange-500"
+          flash={flash}
         />
         <Stat
           value={reading ? reading.humidity.toFixed(1) : "--.-"}
           unit="%"
           label="Humidity"
           color="bg-blue-50 text-blue-500"
+          flash={flash}
         />
       </div>
       <div className="flex items-center gap-2 justify-end pr-1">
@@ -76,8 +111,7 @@ export function CurrentReadings() {
         />
         <span className="text-xs text-gray-400">
           {live ? "Live" : "Connecting…"}
-          {reading &&
-            ` · last update ${new Date(reading.time).toLocaleTimeString()}`}
+          {updatedAt && ` · updated ${secondsAgo}`}
         </span>
       </div>
     </div>
