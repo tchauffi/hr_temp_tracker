@@ -77,14 +77,17 @@ LOG:<temperature>:<humidity>
 # 1. Flash the Arduino sketch
 #    Open humidity_tracker.ino in Arduino IDE and upload to the board.
 
-# 2. Start everything
+# 2. Start everything (runs detached — safe to close the terminal)
 ./start.sh
+
+# 3. Stop everything
+./stop.sh
 ```
 
 `start.sh` will:
 1. Auto-detect the Arduino serial device (`/dev/cu.usbmodem*`)
-2. Start a socat TCP proxy forwarding it to port 8899
-3. Bring up all Docker services (`db`, `api`, `frontend`)
+2. Start a socat TCP proxy forwarding it to port 8899 (detached, PID saved to `/tmp/.humidity_tracker_socat.pid`)
+3. Bring up all Docker services in detached mode (`db`, `api`, `frontend`)
 
 Open **http://localhost:3000** to see the dashboard.
 
@@ -100,6 +103,12 @@ To override the serial device:
 SERIAL_DEV=/dev/cu.usbmodem1234 ./start.sh
 ```
 
+To view live logs after starting:
+
+```bash
+docker compose logs -f api
+```
+
 ## Project structure
 
 ```
@@ -107,7 +116,8 @@ humidity_tracker/
 ├── humidity_tracker.ino      # Arduino sketch (EMA filter, OLED display, serial output)
 ├── init.sql                  # TimescaleDB schema (hypertable + index)
 ├── docker-compose.yml        # db + api + frontend services
-├── start.sh                  # One-command startup (socat proxy + docker compose)
+├── start.sh                  # One-command startup (detached: socat + docker compose)
+├── stop.sh                   # Stop socat + docker compose
 ├── .env.example              # Environment variable reference
 ├── api/
 │   ├── main.py               # FastAPI server
